@@ -24,6 +24,11 @@ pressure/release, vertical tracking, and two-axis geometric capture. Each has
 portable definition/loadout JSON. Fish, rods, bait and capture shapes live in
 `docs/examples/shared/catalog.json`.
 
+For integration boundaries, see the executable
+[game-owned preparation and rewards example](examples/game_rules.rs). It bypasses
+the optional profile helpers and derives the same capture window from equipment
+in one game and skill in another, then scores the run outside the engine.
+
 ## Build and run native hosts
 
 ```sh
@@ -45,6 +50,10 @@ The JSON dispatcher and WASM allocation ABI live in `src/lib.rs`. They import
 `fishing`; they contain no second implementation of its dynamics.
 Requests are capped at 64 KiB. JavaScript owns inputs, rendering and memory
 management; the WASM module has no host imports.
+
+The native [TypeScript port](https://github.com/urcades/fishing-system), published
+as `fishing-system` on npm, pins this repository's schema/fixtures and checks against
+the published Rust crate. The browser demos here continue to use Rust/WASM.
 
 ## Verify and port
 

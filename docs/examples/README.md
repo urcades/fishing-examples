@@ -16,3 +16,16 @@ The `shared/loadout.mjs` file is browser authoring glue: catalog selection, meta
 The browser keeps one in-memory loadout/recording per example, pauses when switching, and locks authoring during active/replayed recordings. Pause exposes single-tick input controls. Scrub inspects saved state; replay executes the same inputs through Rust and compares every snapshot. Reload clears browser sessions. The pure core retains no history.
 
 Shapes currently share the rod's outer bounding window. Rectangle offers the most area; circle, oval, ring, triangle and starburst introduce different tracking constraints. Shape data remains fixed during a recording. No rotation, dynamic resizing, fish-specific shape bonus or automatic species-to-shape selection is included.
+
+## Bringing your own game rules
+
+These four recipes use the optional fish/rod/bait resolver. It is one authoring
+model, not a requirement. [examples/game_rules.rs](../../examples/game_rules.rs)
+shows two game-owned preparation policies producing identical encounter configs:
+rod tier in one game, skill level in another. It then folds pre-step alignment into
+performance statistics and applies host-owned quality, price and XP rules.
+
+Run `cargo run --locked --example game_rules`; its tests run with `cargo test --all-targets`.
+This is a headless integration example, not a fifth fishing mechanic. Shore distance
+only affects its illustrative reward policy; it never enters the simulation state.
+The reward rules and metadata are deliberately outside the crate.
