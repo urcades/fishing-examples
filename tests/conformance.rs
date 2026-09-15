@@ -1,5 +1,5 @@
+use fishing::*;
 use fishing_examples::{call_json, MAX_REQUEST_BYTES};
-use fishing_protocol::*;
 use serde_json::Value;
 fn close(a: &Value, b: &Value, path: &str) {
     match (a, b) {

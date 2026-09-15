@@ -3,21 +3,21 @@
 version = 4
 
 [[package]]
-name = "fishing-examples"
+name = "fishing"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb032d9a2743ef4a52e7d06ccc0ba8232bcb83d6ddc783c4da5eae691d49e72b"
 dependencies = [
- "fishing-protocol",
  "serde",
- "serde_json",
 ]
 
 [[package]]
-name = "fishing-protocol"
+name = "fishing-examples"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8edf9e9b2e2c4c5f144872befb9e20590f67a528b9a82d4d4f5e6c4f1196661f"
 dependencies = [
+ "fishing",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

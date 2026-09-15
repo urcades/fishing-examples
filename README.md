@@ -1,7 +1,7 @@
 # Fishing examples
 
 Four playable fishing minigames built on the
-[`fishing-protocol` Rust crate](https://github.com/urcades/fishing).
+[`fishing` Rust crate](https://github.com/urcades/fishing).
 This repository owns the hosts and demonstration data; all gameplay dynamics
 come from the imported crate, compiled natively or to WebAssembly.
 
@@ -40,7 +40,7 @@ The CLI accepts one JSON request per line and returns `{"ok": ...}` or
 ```
 
 The JSON dispatcher and WASM allocation ABI live in `src/lib.rs`. They import
-`fishing_protocol`; they contain no second implementation of its dynamics.
+`fishing`; they contain no second implementation of its dynamics.
 Requests are capped at 64 KiB. JavaScript owns inputs, rendering and memory
 management; the WASM module has no host imports.
 

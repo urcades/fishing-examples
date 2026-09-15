@@ -1,5 +1,5 @@
 //! JSON and WebAssembly host boundary for the fishing examples.
-use fishing_protocol::*;
+use fishing::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

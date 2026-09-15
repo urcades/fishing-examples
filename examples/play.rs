@@ -1,5 +1,5 @@
 //! Headless host: load a documented recipe, then provide a simple input policy.
-use fishing_protocol::*;
+use fishing::*;
 use std::{env, fs, path::PathBuf};
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let folder = env::args().nth(1).unwrap_or_else(|| "one-good-bite".into());
