@@ -1,0 +1,33 @@
+{
+  "fish": {
+    "strength": 1,
+    "fishSpeed": 0.34,
+    "surge": 1.8,
+    "rest": 1.2,
+    "fatigue": 0.1,
+    "recovery": 0.2,
+    "biteWindow": 1.1,
+    "targetCenter": 0.5,
+    "targetSpread": 1,
+    "restWander": 0.16,
+    "preference": "insect",
+    "pondWeight": 1
+  },
+  "rod": {
+    "windowSize": 0.28,
+    "reelRate": 0.08,
+    "lineCapacity": 1,
+    "tackleAcceleration": 3.2,
+    "tackleDamping": 3.8,
+    "tackleSpeed": 0.9
+  },
+  "bait": {
+    "attraction": 1,
+    "biteBonus": 0,
+    "affinity": {
+      "insect": 1,
+      "grain": 1,
+      "flash": 1
+    }
+  }
+}

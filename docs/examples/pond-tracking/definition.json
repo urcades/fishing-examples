@@ -1,0 +1,9 @@
+{
+  "mode": "tracking",
+  "dimensions": 1,
+  "parameters": {},
+  "capture": {
+    "kind": "rectangle"
+  },
+  "hookBonus": 0
+}

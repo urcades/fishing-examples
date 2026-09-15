@@ -1,0 +1,9 @@
+{
+  "mode": "pressure",
+  "dimensions": 0,
+  "parameters": {},
+  "capture": {
+    "kind": "rectangle"
+  },
+  "hookBonus": 0
+}

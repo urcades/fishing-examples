@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5ef">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css?v=5">
+  <title>Fishing, functionally.</title>
+</head>
+<body>
+  <header class="page-header">
+    <div><h1>Fishing, functionally.</h1><p>Follow the fish. Find your rhythm.</p></div>
+    <div class="clock-note">60 ticks / second<span>Bounded to 60 seconds</span></div>
+  </header>
+  <main>
+    <nav class="example-bar" aria-label="Fishing examples">
+      <label for="example">Fishing style<select disabled id="example" aria-label="Fishing style">
+        <option value="spatial">1. Pond tracking · Stardew style</option>
+        <option value="bite">2. One good bite · Animal Crossing style</option>
+        <option value="pressure">3. Give and take · Original dynamics</option>
+        <option value="two-axis">4. Open water · Two-axis alignment</option>
+      </select></label>
+      <div><p id="example-description">Follow a fish with a floating tackle window.</p><p class="fine">Each example keeps its own run. Switching pauses the action.</p></div>
+    </nav>
+    <div class="instrument">
+      <section class="play-area" aria-label="Playable fishing state machine">
+        <section id="bite-play" class="bite-play" aria-label="Bite timing game" hidden>
+          <svg class="pond" viewBox="0 0 380 150" role="img" aria-label="A fishing float waiting on the pond">
+            <ellipse cx="190" cy="102" rx="150" ry="32" fill="#dce7df"/>
+            <ellipse cx="190" cy="102" rx="75" ry="17" fill="none" stroke="#a9c7b8"/>
+            <ellipse cx="190" cy="102" rx="38" ry="8" fill="none" stroke="#8db2a1"/>
+            <g id="bobber"><path d="M190 40V82" stroke="#6d8776" stroke-width="2"/><path d="M180 82Q190 62 200 82V93H180Z" fill="#e77a69"/><path d="M180 93H200Q198 110 190 110Q182 110 180 93" fill="#fafaf6" stroke="#6d8776"/></g>
+          </svg>
+          <h2 id="bite-headline">One good bite.</h2>
+          <p id="bite-caption">Cast, release, and wait for the float to dip.</p>
+          <div class="bite-timer" role="meter" aria-label="Bite time remaining" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1"><div id="bite-fill"></div></div>
+          <output id="bite-clock">1.60 s to react</output>
+          <div class="bite-route" aria-label="Lifecycle: ready, waiting, bite, caught or escaped"><span data-phase="ready">Ready</span><i>→</i><span data-phase="waiting">Wait</span><i>→</i><span data-phase="bite">Bite</span><i>→</i><span data-phase="caught">Caught</span><span data-phase="escaped">Escaped</span></div>
+        </section>
+        <section id="pressure-play" class="pressure-play" aria-label="Original pressure state machine" hidden><h2>A little give, a little take.</h2><p>Hold to reel. Release to ease the strain. Watch the next surge.</p><div id="pressure-machine-slot"></div></section>
+        <section id="spatial-play" class="spatial-play" aria-label="Fish and tackle alignment">
+          <div class="tracking-arena">
+            <div class="track-scale" aria-hidden="true"><span>1.0</span><span>0.5</span><span>0.0</span></div>
+            <div id="water-column" class="water-column" role="img" aria-label="A fish inside a movable tackle window on a vertical track">
+              <div id="surge-target" class="surge-target" hidden></div>
+              <div id="tackle-window" class="tackle-window"><svg viewBox="0 0 100 100" aria-hidden="true"><path id="capture-path" fill-rule="evenodd" vector-effect="non-scaling-stroke"/></svg></div>
+              <div id="fish-marker" class="fish-marker"><svg viewBox="0 0 36 24" aria-hidden="true"><path d="M9 12C16 1 29 2 35 12C29 22 16 23 9 12L1 20V4Z"/><circle cx="28" cy="10" r="1.8"/></svg></div>
+            </div>
+          </div>
+          <div class="tracking-copy">
+            <h2 id="tracking-title">Keep the fish inside.</h2>
+            <p id="tracking-instructions">Hold to raise the tackle.<br>Release to let it fall.</p>
+            <div class="alignment-readout"><output id="alignment-value">100%</output><span>aligned</span></div>
+            <p id="alignment-effect" class="alignment-effect">Reeling happens automatically while aligned.</p>
+            <div class="spatial-legend"><span class="window-key">Tackle window</span><span class="fish-key">Fish</span></div>
+            <p id="surge-direction" class="surge-direction">Cast to begin the encounter.</p>
+            <output id="axis-alignment" hidden>X 100% · Y 100%</output>
+          </div>
+        </section>
+        <p id="encounter-label" class="encounter-label"></p>
+        <div class="status-line"><strong id="status" role="status" aria-live="polite">A quiet moment. Cast when you’re ready.</strong><span id="time">0.00 s</span></div>
+        <div class="gauges" id="gauges">
+          <div class="gauge-row"><label for="progress">Progress <span>P</span></label><div class="meter-track"><meter id="progress" min="0" max="1" value="0.25">0.25</meter><div class="meter-fill progress"></div></div><output id="progress-value">0.250</output></div>
+          <div class="gauge-row"><label for="tension">Tension <span>T</span></label><div class="meter-track tension-track"><meter id="tension" min="0" max="1" value="0">0</meter><div class="meter-fill tension"></div><span class="danger-mark" title="Warning at 75% tension"></span></div><output id="tension-value">0.000</output></div>
+          <div class="gauge-row"><label for="energy">Energy <span>E</span></label><div class="meter-track"><meter id="energy" min="0" max="1" value="1">1</meter><div class="meter-fill energy"></div></div><output id="energy-value">1.000</output></div>
+        </div>
+        <div id="steering-controls" class="steering-controls" hidden><button id="steer-left" aria-label="Steer left">← Left</button><span>Steer with ← → or A / D</span><button id="steer-right" aria-label="Steer right">Right →</button></div>
+        <div class="controls"><button disabled id="action" class="primary">Cast a line</button><button disabled id="pause">Pause</button><button disabled id="step">Step</button><button disabled id="reset">Reset</button></div>
+        <div class="control-note"><p id="instruction">Press to cast, release, then press again when the fish bites.</p><label id="step-input-wrap" for="step-input" hidden>Step input <select id="step-input" aria-label="Step input"><option value="0">Release / fall</option><option value="1">Hold / rise</option></select></label></div>
+        <label id="step-steer-wrap" hidden>Step steering <select id="step-steer" aria-label="Step steering"><option value="0">Coast</option><option value="-1">Left</option><option value="1">Right</option></select></label>
+        <section id="history-chart" class="history-chart" aria-label="Live dynamics chart">
+          <div class="chart-heading"><h2>The last 12 seconds</h2><div class="legend"><span class="progress">Progress</span><span class="tension">Tension</span><span class="energy">Energy</span></div></div>
+          <svg id="chart" viewBox="0 0 800 158" role="img" aria-label="Progress, tension and energy over the last twelve simulated seconds">
+            <g class="chart-grid"><path d="M32 12H788M32 69H788M32 126H788M32 12V126M158 12V126M284 12V126M410 12V126M536 12V126M662 12V126M788 12V126"/></g>
+            <g class="chart-labels"><text x="0" y="16">1.0</text><text x="0" y="73">0.5</text><text x="0" y="130">0.0</text><text x="32" y="150">−12s</text><text x="280" y="150">−8s</text><text x="532" y="150">−4s</text><text x="772" y="150">now</text></g>
+            <path id="curve-energy" class="curve energy"/><path id="curve-progress" class="curve progress"/><path id="curve-tension" class="curve tension"/>
+          </svg>
+        </section>
+        <div class="event-line"><span>Last transition</span><output id="event">Ready for a cast</output><span id="lift-label">Lift = 0</span></div>
+        <details id="machine-details" class="machine-details"><summary>State machine <span>Explore the transitions</span></summary>
+        <div id="shared-machine" class="machine">
+          <svg id="machine" viewBox="0 0 820 254" role="img" aria-label="Lifecycle: Ready to Waiting to Bite to Struggle to Caught, or Escaped. Struggle cycles through Rest, Warning and Surge.">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+            <g class="edges" fill="none" marker-end="url(#arrow)">
+              <path d="M119 71H196"/><path d="M282 71H359"/><path d="M445 71H522"/><path d="M608 71H685"/>
+              <path d="M592 106L722 181"/><path d="M408 112V226H717" class="edge-faint"/>
+              <path d="M557 114Q546 136 493 149"/><path d="M497 179H518"/><path d="M582 179H603"/>
+              <path d="M635 211C635 248 465 248 465 211"/>
+            </g>
+            <g class="phase-node" data-phase="ready"><circle cx="76" cy="71" r="43"/><text x="76" y="76">Ready</text></g>
+            <g class="phase-node" data-phase="waiting"><circle cx="239" cy="71" r="43"/><text x="239" y="76">Waiting</text></g>
+            <g class="phase-node" data-phase="bite"><circle cx="402" cy="71" r="43"/><text x="402" y="76">Bite</text></g>
+            <g class="phase-node" data-phase="struggle"><circle cx="565" cy="71" r="43"/><text x="565" y="76">Struggle</text></g>
+            <g class="phase-node" data-phase="caught"><circle cx="728" cy="71" r="43"/><text x="728" y="76">Caught</text></g>
+            <g class="phase-node" data-phase="escaped"><circle cx="750" cy="202" r="34"/><text x="750" y="207">Escaped</text></g>
+            <g class="behavior-node" data-behavior="rest"><circle cx="465" cy="179" r="32"/><text x="465" y="183">Rest</text></g>
+            <g class="behavior-node" data-behavior="warning"><circle cx="550" cy="179" r="32"/><text x="550" y="183">Warning</text></g>
+            <g class="behavior-node" data-behavior="surge"><circle cx="635" cy="179" r="32"/><text x="635" y="183">Surge</text></g>
+            <text class="graph-caption" x="34" y="171">A small, closed world.</text><text class="graph-caption subcaption" x="34" y="193">Every arrow is a state transition.</text>
+          </svg>
+          <svg class="mobile-machine" viewBox="0 0 350 267" role="img" aria-label="Ready, Waiting, Bite, then Struggle leading to Caught or Escaped. Struggle cycles through Rest, Warning, Surge.">
+            <defs><marker id="mobile-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path fill="#587b6e" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+            <g class="edges" fill="none" marker-end="url(#mobile-arrow)"><path d="M86 45H144"/><path d="M205 45H263"/><path d="M276 72L201 105"/><path d="M139 130H87"/><path d="M211 130H263"/><path d="M156 161Q116 175 88 193"/><path d="M99 218H147"/><path d="M203 218H250"/><path d="M278 245C278 265 72 265 72 246"/><path class="edge-faint" d="M309 72V99"/></g>
+            <g class="phase-node" data-phase="ready"><circle cx="56" cy="45" r="30"/><text x="56" y="49">Ready</text></g>
+            <g class="phase-node" data-phase="waiting"><circle cx="175" cy="45" r="30"/><text x="175" y="49">Waiting</text></g>
+            <g class="phase-node" data-phase="bite"><circle cx="294" cy="45" r="30"/><text x="294" y="49">Bite</text></g>
+            <g class="phase-node" data-phase="caught"><circle cx="56" cy="130" r="30"/><text x="56" y="134">Caught</text></g>
+            <g class="phase-node" data-phase="struggle"><circle cx="175" cy="130" r="36"/><text x="175" y="134">Struggle</text></g>
+            <g class="phase-node" data-phase="escaped"><circle cx="294" cy="130" r="30"/><text x="294" y="134">Escaped</text></g>
+            <g class="behavior-node" data-behavior="rest"><circle cx="72" cy="218" r="27"/><text x="72" y="222">Rest</text></g>
+            <g class="behavior-node" data-behavior="warning"><circle cx="175" cy="218" r="27"/><text x="175" y="222">Warning</text></g>
+            <g class="behavior-node" data-behavior="surge"><circle cx="278" cy="218" r="27"/><text x="278" y="222">Surge</text></g>
+          </svg>
+        </div>
+        </details>
+      </section>
+      <aside aria-label="Model settings and state inspector">
+        <section class="temperament" aria-label="Loadout editor">
+          <h2>Build a loadout</h2>
+          <label class="loadout-select" for="preset"><span>Fish</span><select id="preset" aria-label="Fish"></select></label>
+          <p id="fish-description" class="loadout-description"></p>
+          <label class="loadout-select" for="rod"><span>Rod</span><select id="rod" aria-label="Rod"></select></label>
+          <p id="rod-description" class="loadout-description"></p>
+          <label class="loadout-select" for="bait"><span>Bait</span><select id="bait" aria-label="Bait"></select></label>
+          <p id="bait-description" class="loadout-description"></p>
+          <label class="loadout-select" for="shape"><span>Tackle</span><select id="shape" aria-label="Tackle shape"></select></label>
+          <p id="shape-description" class="loadout-description"></p>
+          <div id="loadout-summary" class="loadout-summary"></div>
+          <details id="loadout-effects" class="loadout-details"><summary>What changes this game</summary>
+            <div id="effects-list"></div>
+            <p id="odds-label" class="fine"></p><div id="fish-odds"></div>
+            <p id="resolution-notes" class="fine"></p>
+            <details class="resolved-details"><summary>Resolved encounter · JSON</summary><pre id="resolved-config" tabindex="0"></pre></details>
+          </details>
+          <details id="attribute-editor" class="loadout-details"><summary>Tune individual attributes</summary>
+            <p class="fine">Edits belong to the fish, rod, or bait. Inactive attributes stay inactive in this style. Pin a fish to edit it.</p>
+            <div id="attribute-fields"></div>
+            <button id="restore-loadout" class="small-button">Restore selected profiles</button>
+          </details>
+          <label class="seed-row" for="seed">Random seed<input id="seed" type="number" min="0" max="4294967295" step="1" value="42"></label>
+          <button id="next-seed" class="small-button">Next seed / pond draw</button>
+          <p id="settings-note" class="fine">Loadout is fixed for a recording. Reset to change it.</p>
+        </section>
+        <section class="inspector">
+          <div class="inspector-heading"><h2>Inspect a moment</h2><span id="mode">Live</span></div>
+          <label class="sr-only" for="timeline">Recorded tick</label><input type="range" id="timeline" min="0" max="0" step="1" value="0" disabled>
+          <div class="timeline-label"><span id="tick-label">Tick 0 / 0</span><span id="history-time">0.00 s</span></div>
+          <div class="replay-controls"><button id="live" disabled>Back to live</button><button id="replay" disabled>Replay inputs</button></div>
+          <p id="replay-note" class="fine">Scrub to inspect. Replay recomputes every state.</p>
+          <div class="state-label">State <span id="state-context">at the current tick</span></div>
+          <pre id="state-json" tabindex="0"></pre>
+        </section>
+      </aside>
+    </div>
+    <details class="function-details">
+      <summary><div><h2>The transition function</h2><code>step(state, input, config) → { state, events }</code></div><span class="details-hint">Look inside</span></summary>
+      <div class="function-content">
+        <div><p id="function-description">One tick reads the old positions and energy, computes alignment and all three rates, then returns new bounded values and positions. Rendering, clocks, and input recording live outside this function.</p>
+          <pre id="equations" class="equations">q = overlap(fish, tackle window) / fish height
+F = strength × E × behavior
+ΔP = (reelRate × q − escapeRate × (0.4 + F) × (1 − q)) × dt
+T_target = baseTension × q + F × (0.3 + 1.1 × (1 − q))
+ΔT = (T_target − T) / response × dt
+ΔE = (recovery × (1 − q) × (1 − E) − fatigue × q × T × E) × dt
+
+Tackle acceleration = (2 × lift − 1) × 3.2 − 3.8 × velocity
+Fish vigor = 0.35 + 0.65 × E</pre>
+          <p id="function-note" class="fine">Alignment q is derived from geometry. Hold = lift 1, release = lift 0. dt = 1/60 second. Positions, P, T, E and q stay in [0,1]; both velocities are bounded.</p>
+        </div>
+        <div><h3>One shared lifecycle</h3><p>Ready → waiting → bite → optional struggle → caught or escaped. A fresh press hooks the bite. Terminal states absorb input. Each example supplies its struggle rules; the lifecycle stays the same.</p><p>Line break → escape → catch → timeout is the terminal precedence. A 60-second limit bounds each run and recording. Waiting at “Ready” consumes no ticks.</p><p>The Rust core runs here through WebAssembly. The native Rust build and an independent Python port are checked against shared fixtures. Integer state and events must match exactly; numerical checkpoints use a 1e−12 absolute tolerance. This is bounded simulation, not exhaustive model checking.</p><a href="https://github.com/urcades/fishing/blob/main/spec/PROTOCOL.md" target="_blank" rel="noopener">Read the rules and protocol ↗</a> · <a href="https://github.com/urcades/fishing/blob/main/src/dynamics.rs" target="_blank" rel="noopener">Shared lifecycle ↗</a></div>
+      </div>
+    </details>
+    <footer>Four ways to fish. One small protocol.<span id="runtime-status">Loading Rust core…</span></footer>
+  </main>
+  <script type="module" src="./app.mjs?v=5"></script>
+</body>
+</html>
