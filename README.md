@@ -15,7 +15,9 @@ python3 -m http.server 8057 --bind 127.0.0.1
 
 Open <http://127.0.0.1:8057/playground/>. The checked-in WASM binary lets the
 static demo run without a Rust installation. Keyboard and on-screen controls,
-loadout editing, state inspection, recording and replay are included.
+loadout editing, state inspection, recording and replay are included. The behavior
+selector adds darting and gliding fish patterns; false bites can be enabled in
+any of the four games. The original settings remain the defaults.
 
 [The four recipes](docs/examples/README.md) are reaction-only hooking,
 pressure/release, vertical tracking, and two-axis geometric capture. Each has
@@ -56,9 +58,10 @@ Python packages are needed. Cargo downloads the Rust dependencies.
 
 [Conformance fixtures](conformance/README.md) cover 12 traces / 8,080 advancing
 ticks, eight transition boundaries, 30 geometry cases, 24 loadout resolutions,
-12 weighted draws and 17 invalid imports. The original tests additionally cover
+12 weighted draws and 16 invalid imports (a formerly rejected narrow window is now valid). The original tests additionally cover
 192 fish/rod/bait/style combinations, six capture shapes, bounds and replay.
-Expected outputs are preserved from the prototype; checks do not regenerate them.
+The 0.2 extension suite also compares full Python/WASM traces and hand-derived
+false-bite/segment checkpoints. Expected historical outputs are preserved from the prototype; checks do not regenerate them.
 
 The [protocol specification](https://github.com/urcades/fishing/blob/main/spec/PROTOCOL.md)
 and the [wire schemas](spec/fishing.schema.json) describe the contract. The

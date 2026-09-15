@@ -7,7 +7,7 @@ async function bytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 export async function readData(url) { return JSON.parse(new TextDecoder().decode(await bytes(url))); }
-const { instance } = await WebAssembly.instantiate(await bytes(new URL('./fishing.wasm', import.meta.url)), {});
+const { instance } = await WebAssembly.instantiate(await bytes(new URL('./fishing.wasm?v=0.2.0', import.meta.url)), {});
 const wasm = instance.exports;
 const encoder = new TextEncoder(), decoder = new TextDecoder();
 export function call(op, payload) {

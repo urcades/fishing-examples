@@ -71,7 +71,7 @@ test('stronger line lowers normalized strain without reducing transmitted fatigu
   for (const style of ['spatial', 'pressure', 'two-axis']) {
     const normal = createConfig({ style, lineCapacity: 1 });
     const strong = createConfig({ style, lineCapacity: 1.5 });
-    const s = { ...createState(42, normal), phase: 'struggle', behavior: 'surge', tension: .6, energy: .8, lift: 1 };
+    const s = { ...createState(42, normal), phase: 'struggle', behaviorDuration: 60, behavior: 'surge', tension: .6, energy: .8, lift: 1 };
     const a = observe(s, normal), b = observe({ ...s, tension: .4 }, strong);
     assert.ok(Math.abs(a.energyRate - b.energyRate) < 1e-12);
     assert.ok(Math.abs(a.targetTension / 1.5 - b.targetTension) < 1e-12);

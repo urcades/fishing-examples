@@ -1,6 +1,45 @@
 use fishing::*;
 use fishing_examples::{call_json, MAX_REQUEST_BYTES};
 use serde_json::Value;
+// Fixtures remain schema 1. Only explicit metadata/default-field migration
+// is applied; numeric checkpoints, RNG and event ordering are never rewritten.
+fn legacy(mut v: Value) -> Value {
+    match &mut v {
+        Value::Object(m) => {
+            for key in [
+                "segmentIndex",
+                "nibblesLeft",
+                "pattern",
+                "nibbles",
+                "maxTicks",
+            ] {
+                m.remove(key);
+            }
+            if m.get("version") == Some(&Value::from(2)) {
+                m.insert("version".into(), Value::from(1));
+            }
+            for value in m.values_mut() {
+                *value = legacy(value.take());
+            }
+        }
+        Value::Array(a) => {
+            for value in a {
+                *value = legacy(value.take());
+            }
+        }
+        _ => {}
+    }
+    v
+}
+fn upgraded(mut v: Value) -> Value {
+    if let Some(m) = v.as_object_mut() {
+        if m.get("version") == Some(&Value::from(1)) {
+            m.insert("version".into(), Value::from(2));
+        }
+    }
+    v
+}
+
 fn close(a: &Value, b: &Value, path: &str) {
     match (a, b) {
         (Value::Number(x), Value::Number(y)) => assert!(
@@ -27,7 +66,7 @@ fn close(a: &Value, b: &Value, path: &str) {
     }
 }
 fn wire<T: serde::Serialize>(v: T) -> Value {
-    serde_json::to_value(v).unwrap()
+    legacy(serde_json::to_value(v).unwrap())
 }
 #[test]
 fn accepted_demo_trajectories_and_all_events() {
@@ -63,7 +102,8 @@ fn accepted_demo_trajectories_and_all_events() {
                 );
                 assert_eq!(wire(&r.events), c["events"]);
                 // Every stored checkpoint is a valid resumable JSON snapshot.
-                let resumed: State = serde_json::from_value(wire(&r.state)).unwrap();
+                let resumed: State =
+                    serde_json::from_value(serde_json::to_value(&r.state).unwrap()).unwrap();
                 assert_eq!(resumed, r.state);
             } else {
                 assert!(
@@ -84,7 +124,7 @@ fn threshold_expiry_boundary_and_terminal_fixtures() {
         serde_json::from_str(include_str!("../conformance/fixtures/trajectories.json")).unwrap();
     for case in fixture["steps"].as_array().unwrap() {
         let config: Config = serde_json::from_value(case["config"].clone()).unwrap();
-        let state: State = serde_json::from_value(case["state"].clone()).unwrap();
+        let state: State = serde_json::from_value(upgraded(case["state"].clone())).unwrap();
         let result = step(
             &state,
             serde_json::from_value(case["input"].clone()).unwrap(),
@@ -167,8 +207,57 @@ fn invalid_imports_match_shared_rejection_fixtures() {
     for c in cases.as_array().unwrap() {
         let mut request = c.clone();
         request.as_object_mut().unwrap().remove("id");
+        if c["id"] != "unsupported-version" {
+            if let Some(state) = request.get_mut("state") {
+                *state = upgraded(state.take());
+            }
+        }
         let out: Value =
             serde_json::from_slice(&call_json(&serde_json::to_vec(&request).unwrap())).unwrap();
-        assert!(out.get("error").is_some(), "{}: {out}", c["id"]);
+        assert_eq!(
+            out.get("error").is_some(),
+            c["id"] != "invalid-profile",
+            "{}: {out}",
+            c["id"]
+        );
+    }
+}
+
+#[test]
+fn hand_derived_extension_checkpoints() {
+    fn subset(actual: &Value, expected: &Value) {
+        if let Value::Object(fields) = expected {
+            for (key, value) in fields {
+                subset(&actual[key], value);
+            }
+        } else {
+            close(actual, expected, "extension");
+        }
+    }
+    let fixtures: Value =
+        serde_json::from_str(include_str!("../conformance/fixtures/extensions.json")).unwrap();
+    for case in fixtures["cases"].as_array().unwrap() {
+        let config: Config = serde_json::from_value(case["config"].clone()).unwrap();
+        let mut state = create_state(case["seed"].as_u64().unwrap() as u32, &config).unwrap();
+        for (i, input) in case["inputs"].as_array().unwrap().iter().enumerate() {
+            let next = step(
+                &state,
+                serde_json::from_value(input.clone()).unwrap(),
+                &config,
+            )
+            .unwrap();
+            next.state.validate(&config).unwrap();
+            for check in case["checks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|v| v["tick"].as_u64() == Some(i as u64 + 1))
+            {
+                subset(&serde_json::to_value(&next.state).unwrap(), &check["state"]);
+                assert_eq!(serde_json::to_value(&next.events).unwrap(), check["events"]);
+            }
+            let snapshot = serde_json::to_string(&next.state).unwrap();
+            state = serde_json::from_str(&snapshot).unwrap();
+        }
     }
 }

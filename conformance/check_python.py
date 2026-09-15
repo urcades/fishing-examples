@@ -8,7 +8,14 @@ sys.path.insert(0,str(ROOT/'ports/python'))
 sys.dont_write_bytecode = True
 import fishing as f
 
+def upgrade(s):return dict(s,version=2,segmentIndex=0,nibblesLeft=0)
+def legacy(v):
+    if isinstance(v,list):return [legacy(x) for x in v]
+    if isinstance(v,dict):return {k:1 if k=='version' and x==2 else legacy(x) for k,x in v.items() if k not in ['segmentIndex','nibblesLeft','pattern','nibbles','maxTicks']}
+    return v
+
 def close(a,b,path='root'):
+    a,b=legacy(a),legacy(b)
     if isinstance(a,(int,float)) and isinstance(b,(int,float)):
         assert abs(a-b)<=1e-12,(path,a,b)
     elif isinstance(a,dict):
@@ -32,7 +39,7 @@ for case in traces['traces']:
             close(f.step(json.loads(json.dumps(s)),input,c),f.step(s,input,c))
         else: assert not result['events'],(case['id'],i,result['events'])
     assert f.terminal(s)
-for c in traces['steps']: close(f.step(c['state'],c['input'],c['config']),c['expected'],c['id'])
+for c in traces['steps']: close(f.step(upgrade(c['state']),c['input'],c['config']),c['expected'],c['id'])
 for c in load('geometry.json'):
     close(f.alignment(c['capture'],[c['fishX'],c['fishY']],[c['tackleX'],c['tackleY']],c['size'],c['radius']),c['expected'],c['id'])
 r=load('resolution.json')
@@ -40,6 +47,9 @@ for c in r['resolve']: close(f.resolve(c['definition'],c['loadout'],c['seed']),c
 for c in r['select']: close(f.select(c['pool'],c['bait'],c['seed']),c['expected'],c['id'])
 print(f"Python conformance passed: {len(traces['traces'])} traces / {ticks} ticks, {len(traces['steps'])} edge cases, 30 geometry cases, {len(r['resolve'])} resolutions, {len(r['select'])} selections.")
 for c in load('invalid.json'):
+    if c['id']=='invalid-profile':
+        f.resolve(c['definition'],c['loadout'],c['seed']);continue # 0.01 window is now valid.
+    if 'state' in c and c['id']!='unsupported-version':c['state']=upgrade(c['state'])
     try:
         op=c['op']
         if op=='config': f.config(c['config'])
@@ -50,4 +60,22 @@ for c in load('invalid.json'):
         else: raise AssertionError('unhandled fixture operation')
     except (ValueError,KeyError,TypeError): pass
     else: raise AssertionError('accepted invalid fixture: '+c['id'])
-print(f"Python validation passed: {len(load('invalid.json'))} invalid imports rejected.")
+print("Python validation passed: 16 rejected; narrow-window profile now accepted.")
+
+def subset(a,b):
+    if isinstance(b,dict):
+        for k,v in b.items():subset(a[k],v)
+    else:assert a==b,(a,b)
+for case in load('extensions.json')['cases']:
+    c=f.config(case['config']);s=f.create_state(case['seed'],c)
+    for i,input in enumerate(case['inputs'],1):
+        r=f.step(s,input,c);s=r['state'];f.validate_state(s,c)
+        for check in case['checks']:
+            if check['tick']==i:subset(s,check['state']);assert r['events']==check['events']
+print('Python hand-derived extension checkpoints passed.')
+
+# Newly optional snapshot members use the same zero defaults as Serde.
+c=f.config({'mode':'hook','dimensions':0,'capture':{'kind':'rectangle'}})
+s=f.create_state(42,c);compact={k:v for k,v in s.items() if k not in ['segmentIndex','nibblesLeft']}
+assert f.step(compact,{'primary':1},c)==f.step(s,{'primary':1},c)
+assert f.observe(compact,c)==f.observe(s,c)

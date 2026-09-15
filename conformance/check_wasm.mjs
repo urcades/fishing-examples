@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { call, readData } from '../playground/wasm.mjs';
+const legacy = v => Array.isArray(v) ? v.map(legacy) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k])=>!['segmentIndex','nibblesLeft','pattern','nibbles','maxTicks'].includes(k)).map(([k,v])=>[k,k==='version'&&v===2?1:legacy(v)])) : v;
+const upgrade = s => ({...s,version:2,segmentIndex:0,nibblesLeft:0});
 const load=name=>readData(new URL(`./fixtures/${name}.json`,import.meta.url));
 function close(a,b,path='root'){
+  a=legacy(a); b=legacy(b);
   if(typeof a==='number'&&typeof b==='number')assert.ok(Math.abs(a-b)<=1e-12,`${path}: ${a} vs ${b}`);
   else if(Array.isArray(a)){assert.equal(a.length,b.length,path);a.forEach((v,i)=>close(v,b[i],`${path}[${i}]`));}
   else if(a&&typeof a==='object'){assert.deepEqual(Object.keys(a).sort(),Object.keys(b).sort(),path);for(const k of Object.keys(a))close(a[k],b[k],`${path}.${k}`);}
@@ -16,11 +19,21 @@ for(const c of fixture.traces){
     else assert.deepEqual(result.events,[]);
   }
 }
-for(const c of fixture.steps)close(call('step',{state:c.state,input:c.input,config:c.config}),c.expected,c.id);
+for(const c of fixture.steps)close(call('step',{state:upgrade(c.state),input:c.input,config:c.config}),c.expected,c.id);
 for(const c of await load('geometry'))close(call('capture',{capture:c.capture,fish:[c.fishX,c.fishY],tackle:[c.tackleX,c.tackleY],size:c.size,radius:c.radius}),c.expected,c.id);
 const r=await load('resolution');
 for(const c of r.resolve)close(call('resolve',{definition:c.definition,loadout:c.loadout,seed:c.seed}),c.expected,c.id);
 for(const c of r.select)close(call('select',{pool:c.pool,bait:c.bait,seed:c.seed}),c.expected,c.id);
 console.log(`Rust/WASM conformance passed: ${fixture.traces.length} traces / ${ticks} ticks, ${fixture.steps.length} edge cases, 30 geometry cases, ${r.resolve.length} resolutions, ${r.select.length} selections.`);
-for(const c of await load('invalid')){const {id,op,...args}=c;assert.throws(()=>call(op,args),undefined,id);}
-console.log(`Rust/WASM validation passed: ${(await load('invalid')).length} invalid imports rejected.`);
+for(const c of await load('invalid')){const {id,op,...args}=c;if(args.state&&id!=='unsupported-version')args.state=upgrade(args.state);if(id==='invalid-profile')call(op,args);else assert.throws(()=>call(op,args),undefined,id);}
+console.log('Rust/WASM validation passed: 16 rejected; narrow-window profile now accepted.');
+
+function subset(a,b){ if(b&&typeof b==='object'&&!Array.isArray(b)){for(const k of Object.keys(b))subset(a[k],b[k]);}else assert.deepEqual(a,b); }
+for(const c of (await load('extensions')).cases){
+  let state=call('create',{config:c.config,seed:c.seed});
+  for(const [i,input] of c.inputs.entries()){
+    const r=call('step',{config:c.config,state,input});state=r.state;
+    for(const check of c.checks)if(check.tick===i+1){subset(state,check.state);assert.deepEqual(r.events,check.events);}
+  }
+}
+console.log('Rust/WASM hand-derived extension checkpoints passed.');

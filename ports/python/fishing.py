@@ -1,4 +1,4 @@
-"""Independent Python implementation of Fishing Protocol draft 0.1.
+"""Independent Python implementation of Fishing Protocol draft 0.2.
 
 Only the standard library is used. No Rust/WASM/JavaScript subprocesses.
 Schema bounds and canonical geometry are data, not implementation imports.
@@ -8,7 +8,7 @@ import json
 from math import floor, isfinite
 from pathlib import Path
 
-HZ, DT, MAX_TICKS, RADIUS = 60, 1 / 60, 3600, .03
+HZ, DT, MAX_TICKS, RADIUS = 60, 1 / 60, 36000, .03
 BOUNDS = json.loads((Path(__file__).resolve().parents[2] / 'spec/parameters.json').read_text())
 DEFAULTS = {k: v['default'] for k, v in BOUNDS.items()}
 
@@ -27,7 +27,7 @@ def random(seed):
 
 def ticks(seconds):
     # Python round uses ties-to-even; protocol uses floor(x + 0.5).
-    return max(1, floor(seconds * HZ + .5))
+    return min(MAX_TICKS,max(1, floor(seconds * HZ + .5)))
 
 def area(points):
     # Explicit left fold: newer Python sum() can use compensated summation.
@@ -72,9 +72,40 @@ def validate_capture(c):
             for j,a in enumerate(rings[0]):
                 if intersects(p,rings[1][(i+1)%len(rings[1])],a,rings[0][(j+1)%len(rings[0])]): raise ValueError('hole crossing')
 
+def pattern(value):
+    if not isinstance(value,list) or len(value)>16: raise ValueError('pattern length')
+    result=[]
+    for raw in value:
+        if set(raw)-{'behavior','intensity','pace','duration','jitter','target'}: raise ValueError('segment fields')
+        seg=dict(behavior='rest',intensity=.15,pace=.65,duration=1.2,jitter=0.,target={'kind':'keep'});seg.update(deepcopy(raw))
+        if seg['behavior'] not in ['rest','warning','surge']: raise ValueError('behavior')
+        for k,lo,hi in [('intensity',0,100),('pace',0,10),('duration',DT,600),('jitter',0,1)]:bounded(seg[k],lo,hi)
+        t=seg['target'];kind=t.get('kind')
+        if kind in ['keep','hold','opposite']:
+            if set(t)!={'kind'}:raise ValueError('target fields')
+        elif kind=='wander':
+            if set(t)!={'kind','distance'}:raise ValueError('target fields')
+            bounded(t['distance'],0,1)
+        elif kind=='point':
+            if set(t)!={'kind','point'} or len(t['point'])!=2:raise ValueError('target point')
+            for v in t['point']:bounded(v,0,1)
+        else:raise ValueError('target kind')
+        result.append(seg)
+    return result
+
+def nibbles(value):
+    if set(value)-{'count','duration','gap'}:raise ValueError('nibble fields')
+    n=dict(count=0,duration=.25,gap=.6);n.update(value)
+    if type(n['count']) is not int or not 0<=n['count']<=8:raise ValueError('nibble count')
+    bounded(n['duration'],DT,600);bounded(n['gap'],DT,600)
+    return n
+
 def config(value):
-    if set(value)-{'mode','dimensions','parameters','capture'}: raise ValueError('unknown config field')
-    c=deepcopy(value); c['parameters']=dict(DEFAULTS,**c.get('parameters',{})); p=c['parameters']
+    if set(value)-{'mode','dimensions','parameters','capture','pattern','nibbles','maxTicks'}: raise ValueError('unknown config field')
+    c=deepcopy(value);c['pattern']=pattern(c.get('pattern',[]));c['nibbles']=nibbles(c.get('nibbles',{}));c.setdefault('maxTicks',3600)
+    if type(c['maxTicks']) is not int or not 1<=c['maxTicks']<=MAX_TICKS:raise ValueError('tick limit')
+    if c['mode']=='hook' and c['pattern']:raise ValueError('hook pattern')
+    c['parameters']=dict(DEFAULTS,**c.get('parameters',{})); p=c['parameters']
     if type(c['dimensions']) is not int: raise ValueError('integer dimensions')
     if (c['mode'],c['dimensions']) not in [('hook',0),('pressure',0),('tracking',1),('tracking',2)]: raise ValueError('mechanisms')
     if set(p)!=set(BOUNDS): raise ValueError('unknown parameter')
@@ -85,29 +116,37 @@ def config(value):
     return c
 
 def validate_state(s,c):
-    if set(s) != {'version','mode','dimensions','tick','phase','phaseTicks','duration','behavior','behaviorTicks','behaviorDuration','progress','tension','energy','primary','rng','reason','motion'}: raise ValueError('state fields')
+    s={'segmentIndex':0,'nibblesLeft':0,**s}
+    if set(s) != {'version','mode','dimensions','tick','phase','phaseTicks','duration','behavior','behaviorTicks','behaviorDuration','progress','tension','energy','primary','rng','reason','motion','segmentIndex','nibblesLeft'}: raise ValueError('state fields')
     if type(s['version']) is not int or type(s['dimensions']) is not int: raise ValueError('integer schema/mechanisms')
-    if s['version']!=1 or s['mode']!=c['mode'] or s['dimensions']!=c['dimensions']: raise ValueError('state mechanisms/version')
+    if s['version']!=2 or s['mode']!=c['mode'] or s['dimensions']!=c['dimensions']: raise ValueError('state mechanisms/version')
     for k in ['tick','phaseTicks','duration','behaviorTicks','behaviorDuration']:
         bounded(s[k],0,MAX_TICKS)
         if type(s[k]) is not int: raise ValueError('integer timer')
     if s['phaseTicks']>s['tick'] or s['behaviorTicks']>s['tick']: raise ValueError('elapsed timer exceeds total')
-    if not terminal(s) and s['tick']==MAX_TICKS: raise ValueError('tick limit')
+    if s['tick']>c['maxTicks'] or (not terminal(s) and s['tick']==c['maxTicks']): raise ValueError('tick limit')
     for k in ['progress','tension','energy','primary']: bounded(s[k],0,1)
     bounded(s['rng'],0,0xffffffff)
     if type(s['rng']) is not int: raise ValueError('integer RNG')
-    if s['phase'] not in ['ready','waiting','bite','struggle','caught','escaped'] or s['behavior'] not in ['rest','warning','surge']: raise ValueError('state enum')
+    if s['phase'] not in ['ready','waiting','nibble','bite','struggle','caught','escaped'] or s['behavior'] not in ['rest','warning','surge']: raise ValueError('state enum')
     if terminal(s)!=(s['reason'] is not None): raise ValueError('terminal reason')
     if s['phase']=='caught' and (s['reason']!='landed' or s['progress']!=1): raise ValueError('caught')
-    if s['phase']=='escaped' and s['reason'] not in ['missed_bite','line_broke','got_away','timeout']: raise ValueError('escaped')
+    if s['phase']=='escaped' and s['reason'] not in ['missed_bite','early_hook','line_broke','got_away','timeout']: raise ValueError('escaped')
     if s['phase']=='struggle' and c['mode']=='hook': raise ValueError('hook has no struggle')
-    if s['phase'] in ['waiting','bite'] and not 0<=s['phaseTicks']<s['duration']: raise ValueError('phase timer')
+    if s['phase'] in ['waiting','bite','nibble'] and not 0<=s['phaseTicks']<s['duration']: raise ValueError('phase timer')
+    if type(s['segmentIndex']) is not int or not 0<=s['segmentIndex']<max(1,len(c['pattern'])):raise ValueError('segment index')
+    if type(s['nibblesLeft']) is not int or not 0<=s['nibblesLeft']<=c['nibbles']['count']:raise ValueError('nibbles remaining')
+    if s['phase']=='nibble' and not c['nibbles']['count']:raise ValueError('disabled nibble phase')
+    if s['phase']=='struggle':
+        if not 0<=s['behaviorTicks']<s['behaviorDuration']:raise ValueError('behavior timer')
+        if c['pattern'] and s['behavior']!=c['pattern'][s['segmentIndex']]['behavior']:raise ValueError('segment behavior')
+    max_pace=max((p['pace'] for p in c['pattern']),default=1.7)
     m=s['motion'];p=c['parameters']
     if c['mode']=='tracking':
         if m is None: raise ValueError('motion required')
         if set(m)!={'fishPosition','fishVelocity','fishTarget','tacklePosition','tackleVelocity','fishX','fishVelocityX','fishTargetX','tackleX','tackleVelocityX','steer'}: raise ValueError('motion fields')
         for k in ['fishPosition','fishTarget','tacklePosition','fishX','fishTargetX','tackleX']: bounded(m[k],0,1)
-        for k in ['fishVelocity','fishVelocityX']: bounded(m[k],-p['fishSpeed']*1.7,p['fishSpeed']*1.7)
+        for k in ['fishVelocity','fishVelocityX']: bounded(m[k],-p['fishSpeed']*max_pace,p['fishSpeed']*max_pace)
         for k in ['tackleVelocity','tackleVelocityX']: bounded(m[k],-p['tackleSpeed'],p['tackleSpeed'])
         bounded(m['steer'],-1,1)
     elif m is not None: raise ValueError('nonspatial motion')
@@ -116,7 +155,7 @@ def validate_state(s,c):
 def create_state(seed,c):
     c=config(c); random(seed)  # Validate without consuming a draw.
     m=dict(fishPosition=.5,fishVelocity=0.,fishTarget=.5,tacklePosition=.5,tackleVelocity=0.,fishX=.5,fishVelocityX=0.,fishTargetX=.5,tackleX=.5,tackleVelocityX=0.,steer=0.) if c['mode']=='tracking' else None
-    return dict(version=1,mode=c['mode'],dimensions=c['dimensions'],tick=0,phase='ready',phaseTicks=0,duration=0,behavior='rest',behaviorTicks=0,behaviorDuration=0,progress=.25,tension=0.,energy=1.,primary=0.,rng=seed,reason=None,motion=m)
+    return dict(version=2,segmentIndex=0,nibblesLeft=c['nibbles']['count'],mode=c['mode'],dimensions=c['dimensions'],tick=0,phase='ready',phaseTicks=0,duration=0,behavior='rest',behaviorTicks=0,behaviorDuration=0,progress=.25,tension=0.,energy=1.,primary=0.,rng=seed,reason=None,motion=m)
 
 def terminal(s): return s['phase'] in ['caught','escaped']
 
@@ -143,7 +182,7 @@ def alignment(c,fish,tackle,size,radius=RADIUS):
     return clamp((areas[0]-(areas[1] if len(areas)>1 else 0))/(side*side))
 
 def rates(s,c,primary):
-    p=c['parameters']; active=s['phase']=='struggle'; pull=p['strength']*s['energy']*(1 if s['behavior']=='surge' else .15) if active else 0.
+    p=c['parameters']; active=s['phase']=='struggle'; pull=p['strength']*s['energy']*(c['pattern'][s['segmentIndex']]['intensity'] if c['pattern'] else 1 if s['behavior']=='surge' else .15) if active else 0.
     q=qx=qy=0.
     if s['motion'] is not None:
         m=s['motion']; qy=interval(m['fishPosition'],m['tacklePosition'],p['windowSize']);q=qy
@@ -160,7 +199,7 @@ def rates(s,c,primary):
     return dict(alignment=q,pull=pull,targetTension=target,progressRate=progress,tensionRate=(target-s['tension'])/p['response'] if active else 0.,energyRate=energy,alignmentX=qx,alignmentY=qy)
 
 def observe(s,c):
-    c=config(c);validate_state(s,c);return rates(s,c,s['primary'])
+    c=config(c);s=validate_state(s,c);return rates(s,c,s['primary'])
 
 def enter_behavior(s,b,c):
     p=c['parameters'];r=.5
@@ -173,19 +212,35 @@ def enter_behavior(s,b,c):
     if c['dimensions']==2:
         s['rng'],r=random(s['rng']);m['fishTargetX']=clamp(m['fishX']+(r*2-1)*.16,.08,.92) if b=='rest' else .6+r*.3 if m['fishX']<.5 else .1+r*.3
 
+def enter_segment(s,index,c):
+    seg=c['pattern'][index];s['rng'],r=random(s['rng'])
+    s.update(segmentIndex=index,behavior=seg['behavior'],behaviorTicks=0,behaviorDuration=ticks(seg['duration']*(1+(2*r-1)*seg['jitter'])))
+    if s['motion'] is None:return
+    m=s['motion'];target=seg['target'];kind=target['kind']
+    for axis in range(c['dimensions']):
+        pos,key=('fishPosition','fishTarget') if axis==0 else ('fishX','fishTargetX')
+        if kind=='hold':m[key]=m[pos]
+        elif kind=='point':m[key]=clamp(target['point'][1 if axis==0 else 0],RADIUS,1-RADIUS)
+        elif kind in ['wander','opposite']:
+            s['rng'],r=random(s['rng'])
+            m[key]=clamp(m[pos]+(2*r-1)*target['distance'],RADIUS,1-RADIUS) if kind=='wander' else .6+.3*r if m[pos]<.5 else .1+.3*r
+
 def move_axis(position,velocity,acceleration,limit,low,high):
     speed=clamp(velocity+acceleration*DT,-limit,limit);raw=position+speed*DT
     return clamp(raw,low,high),0. if raw<=low or raw>=high else speed
 
 def movement(s,c,u,steer):
     if s['motion'] is None: return None
-    p=c['parameters'];m=s['motion'];n=dict(m);vigor=.35+.65*s['energy'];pace=1.7 if s['behavior']=='surge' else .65
+    p=c['parameters'];m=s['motion'];n=dict(m);vigor=.35+.65*s['energy']
+    seg=c['pattern'][s['segmentIndex']] if c['pattern'] else None
+    pace=seg['pace'] if seg else 1.7 if s['behavior']=='surge' else .65
+    hold=seg['target']['kind']=='hold' if seg else s['behavior']=='warning'
     n['tacklePosition'],n['tackleVelocity']=move_axis(m['tacklePosition'],m['tackleVelocity'],(2*u-1)*p['tackleAcceleration']-p['tackleDamping']*m['tackleVelocity'],p['tackleSpeed'],p['windowSize']/2,1-p['windowSize']/2)
-    target=m['fishPosition'] if s['behavior']=='warning' else m['fishTarget']
+    target=m['fishPosition'] if hold else m['fishTarget']
     n['fishPosition'],n['fishVelocity']=move_axis(m['fishPosition'],m['fishVelocity'],7*vigor*(target-m['fishPosition'])-3*m['fishVelocity'],p['fishSpeed']*vigor*pace,RADIUS,1-RADIUS)
     if c['dimensions']==2:
         n['tackleX'],n['tackleVelocityX']=move_axis(m['tackleX'],m['tackleVelocityX'],steer*p['tackleAcceleration']-p['tackleDamping']*m['tackleVelocityX'],p['tackleSpeed'],p['windowSize']/2,1-p['windowSize']/2)
-        target=m['fishX'] if s['behavior']=='warning' else m['fishTargetX']
+        target=m['fishX'] if hold else m['fishTargetX']
         n['fishX'],n['fishVelocityX']=move_axis(m['fishX'],m['fishVelocityX'],7*vigor*(target-m['fishX'])-3*m['fishVelocityX'],p['fishSpeed']*vigor*pace,RADIUS,1-RADIUS);n['steer']=steer
     return n
 
@@ -193,7 +248,7 @@ def finish(n,phase,reason):
     n.update(phase=phase,phaseTicks=0,duration=0,reason=reason);return dict(state=n,events=[phase])
 
 def step(s,input,c):
-    c=config(c);validate_state(s,c)
+    c=config(c);s=validate_state(s,c)
     if set(input)-{'primary','steer'}: raise ValueError('unknown input')
     u=input.get('primary',0.);steer=input.get('steer',0.)
     if isinstance(u,bool) or isinstance(steer,bool) or not isfinite(u) or not isfinite(steer): raise ValueError('finite input')
@@ -203,13 +258,22 @@ def step(s,input,c):
     if s['phase']=='ready':
         n['rng'],r=random(s['rng']);n.update(phase='waiting',phaseTicks=0,duration=ticks(p['waitMin']+r*(p['waitMax']-p['waitMin'])));events=['cast']
     elif s['phase']=='waiting':
-        if n['phaseTicks']>=s['duration']: n.update(phase='bite',phaseTicks=0,duration=ticks(p['biteWindow']));events=['bite']
+        if n['phaseTicks']>=s['duration']:
+            if s['nibblesLeft']:
+                n.update(phase='nibble',phaseTicks=0,duration=ticks(c['nibbles']['duration']),nibblesLeft=s['nibblesLeft']-1);events=['nibble']
+            else:n.update(phase='bite',phaseTicks=0,duration=ticks(p['biteWindow']));events=['bite']
+    elif s['phase']=='nibble':
+        if n['phaseTicks']>=s['duration']:n.update(phase='waiting',phaseTicks=0,duration=ticks(c['nibbles']['gap']))
+        elif pressed:return finish(n,'escaped','early_hook')
     elif s['phase']=='bite':
         if n['phaseTicks']>=s['duration']: return finish(n,'escaped','missed_bite')
         if pressed:
             if c['mode']=='hook':
                 n['progress']=1.;r=finish(n,'caught','landed');r['events'].insert(0,'hooked');return r
-            n.update(phase='struggle',phaseTicks=0,duration=0);enter_behavior(n,'rest',c);events=['hooked','rest']
+            n.update(phase='struggle',phaseTicks=0,duration=0)
+            if c['pattern']:enter_segment(n,0,c)
+            else:enter_behavior(n,'rest',c)
+            events=['hooked',n['behavior']]
     elif s['phase']=='struggle':
         r=rates(s,c,u);progress=s['progress']+r['progressRate']*DT;tension=s['tension']+r['tensionRate']*DT
         n.update(motion=movement(s,c,u,steer),progress=clamp(progress),tension=clamp(tension),energy=clamp(s['energy']+r['energyRate']*DT),behaviorTicks=s['behaviorTicks']+1)
@@ -217,8 +281,10 @@ def step(s,input,c):
         if progress<=0: return finish(n,'escaped','got_away')
         if progress>=1: return finish(n,'caught','landed')
         if n['behaviorTicks']>=s['behaviorDuration']:
-            b={'rest':'warning','warning':'surge','surge':'rest'}[s['behavior']];enter_behavior(n,b,c);events=[b]
-    if n['tick']>=MAX_TICKS: return finish(n,'escaped','timeout')
+            if c['pattern']:enter_segment(n,(s['segmentIndex']+1)%len(c['pattern']),c)
+            else:enter_behavior(n,{'rest':'warning','warning':'surge','surge':'rest'}[s['behavior']],c)
+            events=[n['behavior']]
+    if n['tick']>=c['maxTicks']: return finish(n,'escaped','timeout')
     return dict(state=n,events=events)
 
 FISH_KEYS=['strength','fishSpeed','surge','rest','fatigue','recovery','biteWindow','targetCenter','targetSpread','restWander']
@@ -227,7 +293,10 @@ ROD_KEYS=['windowSize','reelRate','lineCapacity','tackleAcceleration','tackleDam
 def validate_profile(kind,p):
     keys=FISH_KEYS if kind=='fish' else ROD_KEYS if kind=='rod' else ['attraction','biteBonus']
     extras=['preference','pondWeight'] if kind=='fish' else ['affinity'] if kind=='bait' else []
-    if set(p)!=set(keys+extras): raise ValueError('profile fields')
+    expected=set(keys+extras)
+    if kind=='fish':
+        pattern(p.get('pattern',[]));expected |= ({'pattern'} if 'pattern' in p else set())
+    if set(p)!=expected: raise ValueError('profile fields')
     for k in keys:
         b=BOUNDS[k] if k in BOUNDS else {'min':.5,'max':2.5} if k=='attraction' else {'min':0,'max':.5}
         bounded(p[k],b['min'],b['max'])
@@ -256,9 +325,11 @@ def select(pool,bait,seed):
     return dict(index=index,seed=seed,odds=odds)
 
 def resolve(definition,loadout,seed):
-    if set(definition)-{'mode','dimensions','parameters','capture','hookBonus'}: raise ValueError('definition fields')
+    if set(definition)-{'mode','dimensions','parameters','capture','hookBonus','pattern','nibbles','maxTicks','timing'}: raise ValueError('definition fields')
     if set(loadout)!={'fish','rod','bait'}: raise ValueError('loadout fields')
-    random(seed); d=deepcopy(definition);bonus=d.pop('hookBonus',0.);bounded(bonus,0,.5);c=config(d);p=c['parameters'];notes=[]
+    random(seed); d=deepcopy(definition);bonus=d.pop('hookBonus',0.);bounded(bonus,0,600);timing=d.pop('timing','classic')
+    if timing not in ['classic','configured']:raise ValueError('timing policy')
+    c=config(d);p=c['parameters'];notes=[];configured=timing=='configured';base_min=p['waitMin'];base_max=p['waitMax']
     for owner in ['fish','rod','bait']: validate_profile(owner,loadout[owner])
     f,r,b=loadout['fish'],loadout['rod'],loadout['bait']
     if c['mode']!='hook':
@@ -267,8 +338,9 @@ def resolve(definition,loadout,seed):
     if c['mode']=='tracking':
         for k in ['fishSpeed','targetCenter','targetSpread','restWander']: p[k]=f[k]
         for k in ['windowSize','tackleAcceleration','tackleDamping','tackleSpeed']: p[k]=r[k]
+    if c['mode']!='hook' and f.get('pattern'):c['pattern']=pattern(f['pattern'])
     affinity=b['affinity'].get(f['preference'],1)
-    for k,v,low,high,label in [('waitMin',1.5/(b['attraction']*affinity),.4,5,'Minimum wait'),('waitMax',3/(b['attraction']*affinity),.4,8,'Maximum wait'),('biteWindow',f['biteWindow']+bonus+b['biteBonus'],.5,2,'Bite duration')]:
+    for k,v,low,high,label in [('waitMin',(base_min if configured else 1.5)/(b['attraction']*affinity),DT if configured else .4,600 if configured else 5,'Minimum wait'),('waitMax',(base_max if configured else 3)/(b['attraction']*affinity),DT if configured else .4,600 if configured else 8,'Maximum wait'),('biteWindow',f['biteWindow']+bonus+b['biteBonus'],DT if configured else .5,600 if configured else 2,'Bite duration')]:
         p[k]=clamp(v,low,high)
         if v!=p[k]: notes.append(f'{label} capped at {p[k]:.2f} to stay within the model bounds.')
-    return dict(version=1,config=config(c),seed=seed,notes=notes)
+    return dict(version=2,config=config(c),seed=seed,notes=notes)

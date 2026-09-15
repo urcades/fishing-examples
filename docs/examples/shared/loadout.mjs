@@ -1,9 +1,9 @@
 /** Authoring profiles resolve once, before a cast. No catalog lookup in step. */
-import { captureFor } from '../../../playground/protocol.mjs';
-import { call } from '../../../playground/wasm.mjs';
-import { FIELDS, FISH, RODS, BAITS, EXAMPLES } from './catalog.mjs';
-export { FIELDS, FISH, RODS, BAITS };
-import { SHAPES } from '../../../playground/geometry.mjs';
+import { captureFor } from '../../../playground/protocol.mjs?v=0.2.0';
+import { call } from '../../../playground/wasm.mjs?v=0.2.0';
+import { FIELDS, FISH, RODS, BAITS, EXAMPLES, PATTERNS } from './catalog.mjs?v=0.2.0';
+export { FIELDS, FISH, RODS, BAITS, PATTERNS };
+import { SHAPES } from '../../../playground/geometry.mjs?v=0.2.0';
 export const LOADOUT_VERSION = 1;
 const freeze = value => {
   if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -29,18 +29,22 @@ function validateExtras(fish, bait) {
   if (!Number.isFinite(fish.pondWeight) || fish.pondWeight <= 0 || fish.pondWeight > 10) throw new RangeError('Fish pond weight must be in (0,10]');
   for (const value of Object.values(bait.affinity)) if (!Number.isFinite(value) || value <= 0 || value > 5) throw new RangeError('Bait affinity must be in (0,5]');
 }
-export function resolveLoadout({ style = 'spatial', fish = FISH.perch, rod = RODS.willow, bait = BAITS.bare, shape = 'rectangle' } = {}) {
+export function resolveLoadout({ style = 'spatial', fish = FISH.perch, rod = RODS.willow, bait = BAITS.bare, shape = 'rectangle', behavior = 'classic', nibbleCount = 0 } = {}) {
   // Copy before freezing. Resolution must not even freeze caller-owned data.
   const profiles = { fish: profile('fish', fish), rod: profile('rod', rod), bait: profile('bait', bait) };
   ({ fish, rod, bait } = profiles);
   validateExtras(fish, bait);
   if (!Object.hasOwn(SHAPES, shape)) throw new RangeError('Unknown tackle shape');
+  if (!Object.hasOwn(PATTERNS, behavior)) throw new RangeError('Unknown behavior pattern');
+  if (!Number.isInteger(nibbleCount) || nibbleCount < 0 || nibbleCount > 8) throw new RangeError('Invalid nibble count');
+  const pattern = style === 'bite' ? [] : PATTERNS[behavior].segments;
+  const nibbles = {count:nibbleCount,duration:.5,gap:.6};
   const definition = EXAMPLES[style];
   if (!definition) throw new RangeError('Unknown fishing style');
   const affinity = bait.affinity[fish.preference] ?? 1;
-  const native = call('resolve', { definition: { ...definition, capture: style === 'two-axis' ? captureFor(shape) : { kind: 'rectangle' } }, loadout: {fish: coreProfile('fish',fish), rod: coreProfile('rod',rod), bait: coreProfile('bait',bait)}, seed: 0 });
+  const native = call('resolve', { definition: { ...definition, pattern, ...(nibbleCount ? {nibbles} : {}), capture: style === 'two-axis' ? captureFor(shape) : { kind: 'rectangle' } }, loadout: {fish: coreProfile('fish',fish), rod: coreProfile('rod',rod), bait: coreProfile('bait',bait)}, seed: 0 });
   const { notes } = native;
-  const config = Object.freeze({ ...native.config.parameters, style, captureShape: style === 'two-axis' ? shape : 'rectangle' });
+  const config = Object.freeze({ ...native.config.parameters, style, captureShape: style === 'two-axis' ? shape : 'rectangle', ...(pattern.length || nibbleCount ? {pattern:native.config.pattern,nibbles:native.config.nibbles,maxTicks:native.config.maxTicks} : {}) });
   const effects = [
     { owner: 'fish + bait', label: 'Wait', value: `${config.waitMin.toFixed(2)}–${config.waitMax.toFixed(2)} s`, active: true, detail: `1.5–3 s ÷ (${bait.attraction.toFixed(2)} attraction × ${affinity.toFixed(2)} preference).` },
     { owner: 'fish + bait', label: 'Bite', value: `${config.biteWindow.toFixed(2)} s`, active: true, detail: `${fish.biteWindow.toFixed(2)} s fish + ${style === 'bite' ? '.50' : '0'} s style + ${bait.biteBonus.toFixed(2)} s bait.` },
@@ -59,7 +63,7 @@ function lookup(catalog, id, owner) {
   if (!Object.hasOwn(catalog, id)) throw new RangeError(`Unknown ${owner}: ${id}`);
   return catalog[id];
 }
-export function prepareEncounter({ style = 'spatial', fish = 'perch', rod = 'willow', bait = 'bare', shape = 'rectangle', seed = 42, fishEdits = {}, rodEdits = {}, baitEdits = {} } = {}) {
+export function prepareEncounter({ style = 'spatial', fish = 'perch', rod = 'willow', bait = 'bare', shape = 'rectangle', behavior = 'classic', nibbleCount = 0, seed = 42, fishEdits = {}, rodEdits = {}, baitEdits = {} } = {}) {
   const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 42;
   const b = profile('bait', lookup(BAITS, bait, 'bait'), baitEdits);
   const r = profile('rod', lookup(RODS, rod, 'rod'), rodEdits);
@@ -72,7 +76,7 @@ export function prepareEncounter({ style = 'spatial', fish = 'perch', rod = 'wil
     fishId = pool[selection.index].id; simulationSeed = selection.seed;
   }
   const f = profile('fish', lookup(FISH, fishId, 'fish'), fishEdits);
-  const resolved = resolveLoadout({ style, fish: f, rod: r, bait: b, shape });
+  const resolved = resolveLoadout({ style, fish: f, rod: r, bait: b, shape, behavior, nibbleCount });
   return freeze({ ...resolved, loadoutVersion: LOADOUT_VERSION, fishId, requestedFish: fish, rodId: rod, baitId: bait, shape,
     sourceSeed: normalizedSeed, seed: simulationSeed, odds,
   });

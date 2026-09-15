@@ -72,7 +72,7 @@ test('every example is catchable, serializable and replays every snapshot', () =
 
 test('two-axis overlap couples both axes to the same resource rates', () => {
   const cfg = createConfig({ style: 'two-axis' });
-  const s = { ...createState(42, cfg), phase: 'struggle', behavior: 'surge', tension: .5, energy: .9 };
+  const s = { ...createState(42, cfg), phase: 'struggle', behaviorDuration: 60, behavior: 'surge', tension: .5, energy: .9 };
   const aligned = observe(s, cfg), missed = observe({ ...s, tackleX: .15 }, cfg);
   assert.equal(aligned.alignment, 1);
   assert.equal(missed.alignment, 0);

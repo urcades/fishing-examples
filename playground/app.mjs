@@ -1,12 +1,12 @@
-import { createState, step, observe, HZ, DT, MAX_TICKS, FISH_RADIUS, isTerminal, toCoreConfig, toCoreState } from './protocol.mjs';
-import { FISH, RODS, BAITS, FIELDS, isActive, prepareEncounter } from './loadout.mjs';
-import { SHAPES } from './geometry.mjs';
-import { random } from './engine.mjs';
+import { createState, step, observe, HZ, DT, MAX_TICKS, FISH_RADIUS, isTerminal, toCoreConfig, toCoreState } from './protocol.mjs?v=0.2.0';
+import { FISH, RODS, BAITS, PATTERNS, FIELDS, isActive, prepareEncounter } from './loadout.mjs?v=0.2.0';
+import { SHAPES } from './geometry.mjs?v=0.2.0';
+import { random } from './engine.mjs?v=0.2.0';
 
 // This file is the effectful shell: browser events, a clock and DOM rendering.
 // The engine can be imported by a completely different renderer unchanged.
 const $ = id => document.getElementById(id);
-const defaultLoadout = () => ({ fish: 'perch', rod: 'willow', bait: 'bare', shape: 'rectangle', fishEdits: {}, rodEdits: {}, baitEdits: {} });
+const defaultLoadout = () => ({ fish: 'perch', rod: 'willow', bait: 'bare', shape: 'rectangle', behavior: 'classic', nibbleCount: 0, fishEdits: {}, rodEdits: {}, baitEdits: {} });
 const examples = {
   spatial: { description: 'Follow the fish in one dimension. Neutral gear preserves the original feel.', instructions: 'Hold Space or the button to rise; release to fall. Reel automatically while aligned.' },
   bite: { description: 'An easy reaction game: one good hook lands the fish. No struggle.', instructions: 'Press to cast, release, then press again when the float dips. That’s the catch.' },
@@ -51,7 +51,7 @@ function record(input) {
   if (result.state === state) return;
   state = result.state;
   inputs.push(input); frames.push(state);
-  if (result.events.length) events.push({ tick: state.tick, label: result.events.map(e => ({ cast: 'Cast → waiting', bite: 'Waiting → bite', hooked: config.style === 'bite' ? 'Hook set' : 'Bite → struggle', rest: 'Rest', warning: 'Warning', surge: 'Surge', caught: config.style === 'bite' ? 'Bite → caught' : 'Struggle → caught', escaped: `Escaped · ${state.reason?.replaceAll('_', ' ') ?? ''}` })[e]).join(' · ') });
+  if (result.events.length) events.push({ tick: state.tick, label: result.events.map(e => ({ cast: 'Cast → waiting', bite: 'Real bite → hook now', nibble: 'Nibble → keep waiting', hooked: config.style === 'bite' ? 'Hook set' : 'Bite → struggle', rest: 'Rest', warning: 'Warning', surge: 'Surge', caught: config.style === 'bite' ? 'Bite → caught' : 'Struggle → caught', escaped: `Escaped · ${state.reason?.replaceAll('_', ' ') ?? ''}` })[e]).join(' · ') });
   if (isTerminal(state)) { running = false; clearLift(); }
 }
 
@@ -186,6 +186,7 @@ $('replay').addEventListener('click', () => {
 
 // Build controls once. Resolution/reporting only run when authoring data
 // changes, never per simulation tick or per DOM render.
+for (const [id, p] of Object.entries(PATTERNS)) $('behavior-pattern').add(new Option(p.name, id));
 for (const [id, catalog] of [['preset', FISH], ['rod', RODS], ['bait', BAITS], ['shape', SHAPES]]) {
   if (id === 'preset') $('preset').add(new Option('Pond draw · bait weighted', 'pond'));
   for (const item of Object.values(catalog)) $(id).add(new Option(item.name, item.id));
@@ -228,11 +229,15 @@ $('seed').addEventListener('input', () => { if ($('seed').value !== '' && $('see
 $('next-seed').addEventListener('click', () => {
   seed = random(seed).rng; $('seed').value = seed; rebuildEncounter();
 });
+$('behavior-pattern').addEventListener('change', () => { loadout = {...loadout,behavior:$('behavior-pattern').value}; rebuildEncounter(); });
+$('nibble-count').addEventListener('change', () => { loadout = {...loadout,nibbleCount:Number($('nibble-count').value)}; rebuildEncounter(); });
 $('restore-loadout').addEventListener('click', () => {
   loadout = { ...loadout, fishEdits: {}, rodEdits: {}, baitEdits: {} }; rebuildEncounter();
 });
 function updateLoadoutView() {
   const { profiles, effects, notes } = encounter;
+  $('behavior-pattern').value = loadout.behavior; $('nibble-count').value = String(loadout.nibbleCount);
+  $('behavior-description').textContent = config.style === 'bite' ? 'No struggle: behavior patterns are inactive.' : PATTERNS[loadout.behavior].hint;
   $('preset').value = loadout.fish; $('rod').value = loadout.rod; $('bait').value = loadout.bait; $('shape').value = loadout.shape;
   for (const owner of ['fish', 'rod', 'bait']) {
     const tuned = Object.keys(loadout[`${owner}Edits`]).length ? ' Tuned.' : '';
@@ -318,7 +323,7 @@ function updateExampleView() {
     : style === 'pressure' ? 'u = button pressure (0 or 1)\nF = strength × E × behavior\nC = line capacity; effort = T × C\nΔP = (reelRate × u − escapeRate × F × (1 − u)) × dt\nT_target = u × (baseTension + F) / C\nΔT = (T_target − T) / response × dt\nΔE = (recovery × (1 − u) × (1 − E) − fatigue × effort × E) × dt'
     : style === 'two-axis' ? spatialWithGear.replace('q = overlap(fish, tackle window) / fish height', 'q = area(fish box ∩ capture shape) / area(fish box)\nRectangle: q = qx × qy; ring: outer overlap − hole overlap').concat('\nSideways acceleration = steer × acceleration − damping × sideways velocity') : spatialWithGear;
   $('function-note').textContent = style === 'bite' ? `Resolved reaction window: ${config.biteWindow.toFixed(2)} s. Rod and shape attributes are inactive. A press on the expiry tick is too late.`
-    : style === 'pressure' ? 'The input field is named lift in the shared protocol; here it means pressure. Neutral loadouts preserve the original v1 trajectories. Capacity separates line strain from fatigue effort.'
+    : style === 'pressure' ? 'The primary input controls reeling pressure. Neutral loadouts preserve the original v1 trajectories. Capacity separates line strain from fatigue effort.'
     : style === 'two-axis' ? 'Shapes use the same bounded polygons for SVG and scoring. Circles use 48 sides; ring holes really exclude capture. Different shapes have different areas at the same window size.'
     : 'Neutral gear preserves the accepted spatial tuning. Hold = lift 1; release = lift 0. Positions and resources stay in [0,1]; velocities are bounded by the rod.';
 }
@@ -326,9 +331,11 @@ function updateExampleView() {
 function statusFor(s) {
   if (s.phase === 'ready') return 'A quiet moment. Cast when you’re ready.';
   if (s.phase === 'waiting') return 'Waiting for a bite… release the button.';
+  if (s.phase === 'nibble') return 'Just a nibble… keep waiting. Do not hook yet.';
   if (s.phase === 'bite') return 'Bite! Press now to set the hook.';
   if (s.phase === 'caught') return 'You caught it. A little give, a little take.';
-  if (s.phase === 'escaped') return ({ missed_bite: 'The bite passed. Try another cast.', line_broke: config.style === 'pressure' ? 'The line broke. Ease off during strong pulls.' : 'The line broke. Keep the tackle closer during surges.', got_away: 'The fish slipped away. Stay with it a little longer.', timeout: 'Time is up. The encounter reached its 60-second bound.' })[s.reason];
+  if (s.phase === 'escaped') return ({ early_hook: 'That was a nibble. Wait for the real bite next time.', missed_bite: 'The bite passed. Try another cast.', line_broke: config.style === 'pressure' ? 'The line broke. Ease off during strong pulls.' : 'The line broke. Keep the tackle closer during surges.', got_away: 'The fish slipped away. Stay with it a little longer.', timeout: 'Time is up. The encounter reached its 60-second bound.' })[s.reason];
+  if (config.pattern?.length && s.phase === 'struggle') return `Segment ${(s.segmentIndex ?? 0)+1} / ${config.pattern.length} · ${s.behavior} · follow this fish’s rhythm.`;
   if (config.style === 'pressure') return s.tension >= .75 ? 'Line strain is high. Release to ease off.' : s.behavior === 'warning' ? 'A surge is coming. Be ready to give some line.' : s.behavior === 'surge' ? 'The fish is pulling. Watch your tension.' : 'The fish is resting. Hold to reel it closer.';
   const q = observe(s, config).alignment;
   if (s.tension >= 0.75) return 'Line strain is high — get the fish back inside.';
@@ -374,12 +381,12 @@ function renderSpatial(s) {
   $('alignment-value').value = `${percent}%`;
   $('alignment-effect').textContent = !active ? 'Reeling happens automatically while aligned.'
     : `${metrics.progressRate >= 0 ? 'Gaining' : 'Losing'} ground. ${metrics.energyRate < 0 ? 'Tiring the fish.' : 'The fish can recover.'}`;
-  $('surge-target').hidden = !active || s.behavior !== 'warning';
+  $('surge-target').hidden = !active || !!config.pattern?.length || s.behavior !== 'warning';
   $('surge-target').style.bottom = `${s.fishTarget * 100}%`;
   $('surge-target').style.left = dual ? `${s.fishTargetX * 100}%` : '';
   if (dual) $('axis-alignment').textContent = `Bounds X ${Math.round(metrics.alignmentX * 100)}% · Y ${Math.round(metrics.alignmentY * 100)}%`;
   $('surge-direction').textContent = isTerminal(s) ? s.phase === 'caught' ? 'Landed · nicely followed' : 'Gone · try another cast'
-    : !active ? 'Cast, wait for a bite, then follow the fish.' : s.behavior === 'warning' ? `Next surge: ${s.fishTarget > s.fishPosition ? 'up ↑' : 'down ↓'}${dual ? s.fishTargetX > s.fishX ? ' and right →' : ' and left ←' : ''}` : s.behavior === 'surge' ? 'Surging · watch the fish' : 'Resting · find your rhythm';
+    : !active ? 'Cast, wait for a bite, then follow the fish.' : config.pattern?.length ? `Segment ${(s.segmentIndex ?? 0)+1} · ${s.behavior}` : s.behavior === 'warning' ? `Next surge: ${s.fishTarget > s.fishPosition ? 'up ↑' : 'down ↓'}${dual ? s.fishTargetX > s.fishX ? ' and right →' : ' and left ←' : ''}` : s.behavior === 'surge' ? 'Surging · watch the fish' : 'Resting · find your rhythm';
 }
 
 function renderBite(s) {
@@ -387,13 +394,13 @@ function renderBite(s) {
   const remaining = biting ? Math.max(0, s.duration - s.phaseTicks) / HZ : config.biteWindow;
   const fraction = biting ? remaining / config.biteWindow : s.phase === 'escaped' ? 0 : 1;
   $('bite-play').dataset.phase = s.phase;
-  $('bite-headline').textContent = ({ ready: 'One good bite.', waiting: 'Watch the float…', bite: 'Bite! Hook it now.', caught: 'A fish, just like that.', escaped: 'Another fish, another chance.' })[s.phase];
-  $('bite-caption').textContent = s.phase === 'caught' ? 'A clean hook is the whole game. Cast again whenever you like.' : s.phase === 'escaped' ? 'The bite passed. Release, cast again, and wait for the dip.' : 'Cast, release, and press again when the float dips.';
-  $('bite-clock').textContent = biting ? `${remaining.toFixed(2)} s left` : s.phase === 'waiting' ? 'Wait for the dip' : isTerminal(s) ? s.phase === 'caught' ? 'Bite → caught · no struggle' : 'Bite → escaped' : `${config.biteWindow.toFixed(2)} s to react`;
+  $('bite-headline').textContent = ({ ready: 'One good bite.', waiting: 'Watch the float…', nibble: 'A nibble. Not yet…', bite: 'Bite! Hook it now.', caught: 'A fish, just like that.', escaped: 'Another fish, another chance.' })[s.phase];
+  $('bite-caption').textContent = s.phase === 'nibble' ? 'A small tug is a false bite. Wait for the full dip and the hook cue.' : s.phase === 'caught' ? 'A clean hook is the whole game. Cast again whenever you like.' : s.phase === 'escaped' ? s.reason === 'early_hook' ? 'That small tug was a false bite. Wait for the full dip next time.' : 'The bite passed. Release, cast again, and wait for the dip.' : 'Cast, release, and press again when the float dips.';
+  $('bite-clock').textContent = biting ? `${remaining.toFixed(2)} s left` : s.phase === 'waiting' ? 'Wait for the dip' : isTerminal(s) ? s.phase === 'caught' ? 'Bite → caught · no struggle' : s.reason === 'early_hook' ? 'Nibble → escaped' : 'Bite → escaped' : `${config.biteWindow.toFixed(2)} s to react`;
   $('bite-fill').style.width = `${fraction * 100}%`;
   document.querySelector('.bite-timer').setAttribute('aria-valuenow', fraction);
   // The float is a rendering of simulation time, so it scrubs and pauses.
-  const dip = biting ? 17 : s.phase === 'caught' ? -25 : s.phase === 'waiting' ? Math.sin(s.phaseTicks * .06) * 3 : 0;
+  const dip = biting ? 17 : s.phase === 'nibble' ? 6 : s.phase === 'caught' ? -25 : s.phase === 'waiting' ? Math.sin(s.phaseTicks * .06) * 3 : 0;
   $('bobber').setAttribute('transform', `translate(0 ${dip})`);
 }
 
@@ -415,7 +422,7 @@ function render() {
     document.querySelector(`.meter-fill.${key}`).style.width = `${s[key] * 100}%`;
     $(`${key}-value`).value = s[key].toFixed(3);
   }
-  $('action').textContent = state.phase === 'ready' ? 'Cast a line' : state.phase === 'waiting' ? 'Waiting…' : state.phase === 'bite' ? 'Hook the fish!' : isTerminal(state) ? 'Cast again' : config.style === 'pressure' ? held ? 'Reeling…' : 'Hold to reel' : held ? 'Rising…' : 'Hold to rise';
+  $('action').textContent = state.phase === 'ready' ? 'Cast a line' : state.phase === 'waiting' ? 'Waiting…' : state.phase === 'nibble' ? 'Not yet…' : state.phase === 'bite' ? 'Hook the fish!' : isTerminal(state) ? 'Cast again' : config.style === 'pressure' ? held ? 'Reeling…' : 'Hold to reel' : held ? 'Rising…' : 'Hold to rise';
   $('action').classList.toggle('pressed', held && !replay && !inspecting);
   $('action').disabled = !!replay || inspecting || (!running && !isTerminal(state));
   $('pause').textContent = running ? 'Pause' : 'Resume';
@@ -428,7 +435,11 @@ function render() {
     $(`steer-${side}`).classList.toggle('pressed', side === 'left' ? leftHeld : rightHeld);
   }
   $('instruction').textContent = inspecting ? 'Inspecting a recorded tick. Back to live returns to the latest state.' : replay ? 'Playing the recorded inputs through the same transition function.' : !running && !isTerminal(state) ? 'Paused. Resume to play, or choose an input and Step one tick.' : config.style !== 'bite' && ['ready', 'waiting', 'bite'].includes(state.phase) ? 'Press to cast, release, then press again when the fish bites.' : examples[config.style].instructions;
-  for (const id of ['preset', 'rod', 'bait', 'shape', 'seed', 'next-seed', 'restore-loadout']) $(id).disabled = locked;
+  for (const id of ['preset', 'rod', 'bait', 'shape', 'behavior-pattern', 'nibble-count', 'seed', 'next-seed', 'restore-loadout']) $(id).disabled = locked;
+  $('behavior-pattern').disabled = locked || config.style === 'bite';
+  $('shared-machine').hidden = !!config.pattern?.length || !!config.nibbles?.count;
+  $('pattern-status').textContent = config.pattern?.length ? `Pattern: ${config.pattern.map((p,i)=>`${i+1}. ${p.behavior}`).join(' → ')}. ${s.phase === 'struggle' ? `Current segment: ${(s.segmentIndex ?? 0)+1}.` : 'Starts after hooking.'}` : config.style === 'bite' ? 'Hook-only: wait → bite → caught.' : 'Classic fish: rest → warning → surge.';
+  if (config.nibbles?.count) $('pattern-status').textContent += ` False bites: ${config.nibbles.count}; ${s.nibblesLeft ?? 0} still to enter.`;
   for (const field of FIELDS) $(field.key).disabled = locked || !isActive(field.uses, config.style) || (field.owner === 'fish' && loadout.fish === 'pond');
   $('settings-note').textContent = locked ? 'Loadout is fixed for this recording. Reset to edit.' : 'Loadout changes start a fresh recording. Reset repeats the same seed; Next seed makes another draw.';
   $('timeline').max = inputs.length; $('timeline').value = index; $('timeline').disabled = !!replay || !inputs.length;
@@ -470,5 +481,5 @@ updateExampleView();
 render();
 // Keep early clicks from being lost while the WASM module/data initialize.
 $('example').disabled = false; $('reset').disabled = false;
-$('runtime-status').textContent = 'Protocol draft 0.1 · Rust / WebAssembly';
+$('runtime-status').textContent = 'Protocol draft 0.2 · Rust / WebAssembly';
 requestAnimationFrame(frame);

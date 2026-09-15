@@ -4,16 +4,16 @@ version = 4
 
 [[package]]
 name = "fishing"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb032d9a2743ef4a52e7d06ccc0ba8232bcb83d6ddc783c4da5eae691d49e72b"
+checksum = "1eb0fbd2c65fa626566cbdc03fca4ce17ee788daa63ac1983798c1e47f52ac55"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "fishing-examples"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "fishing",
  "serde",

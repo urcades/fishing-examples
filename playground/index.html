@@ -79,7 +79,7 @@
         </section>
         <div class="event-line"><span>Last transition</span><output id="event">Ready for a cast</output><span id="lift-label">Lift = 0</span></div>
         <details id="machine-details" class="machine-details"><summary>State machine <span>Explore the transitions</span></summary>
-        <div id="shared-machine" class="machine">
+        <p id="pattern-status" class="loadout-description"></p><div id="shared-machine" class="machine">
           <svg id="machine" viewBox="0 0 820 254" role="img" aria-label="Lifecycle: Ready to Waiting to Bite to Struggle to Caught, or Escaped. Struggle cycles through Rest, Warning and Surge.">
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
             <g class="edges" fill="none" marker-end="url(#arrow)">
@@ -120,6 +120,10 @@
           <h2>Build a loadout</h2>
           <label class="loadout-select" for="preset"><span>Fish</span><select id="preset" aria-label="Fish"></select></label>
           <p id="fish-description" class="loadout-description"></p>
+          <label class="loadout-select" for="behavior-pattern"><span>Behavior</span><select id="behavior-pattern" aria-label="Fish behavior"></select></label>
+          <p id="behavior-description" class="loadout-description"></p>
+          <label class="loadout-select" for="nibble-count"><span>False bites</span><select id="nibble-count" aria-label="False bites"><option value="0">None · original timing</option><option value="2">Two nibbles before the bite</option><option value="4">Four nibbles before the bite</option></select></label>
+          <p class="loadout-description">Wait through the little nibbles. Hook only on the real bite.</p>
           <label class="loadout-select" for="rod"><span>Rod</span><select id="rod" aria-label="Rod"></select></label>
           <p id="rod-description" class="loadout-description"></p>
           <label class="loadout-select" for="bait"><span>Bait</span><select id="bait" aria-label="Bait"></select></label>
@@ -168,11 +172,11 @@ Tackle acceleration = (2 × lift − 1) × 3.2 − 3.8 × velocity
 Fish vigor = 0.35 + 0.65 × E</pre>
           <p id="function-note" class="fine">Alignment q is derived from geometry. Hold = lift 1, release = lift 0. dt = 1/60 second. Positions, P, T, E and q stay in [0,1]; both velocities are bounded.</p>
         </div>
-        <div><h3>One shared lifecycle</h3><p>Ready → waiting → bite → optional struggle → caught or escaped. A fresh press hooks the bite. Terminal states absorb input. Each example supplies its struggle rules; the lifecycle stays the same.</p><p>Line break → escape → catch → timeout is the terminal precedence. A 60-second limit bounds each run and recording. Waiting at “Ready” consumes no ticks.</p><p>The Rust core runs here through WebAssembly. The native Rust build and an independent Python port are checked against shared fixtures. Integer state and events must match exactly; numerical checkpoints use a 1e−12 absolute tolerance. This is bounded simulation, not exhaustive model checking.</p><a href="https://github.com/urcades/fishing/blob/main/spec/PROTOCOL.md" target="_blank" rel="noopener">Read the rules and protocol ↗</a> · <a href="https://github.com/urcades/fishing/blob/main/src/dynamics.rs" target="_blank" rel="noopener">Shared lifecycle ↗</a></div>
+        <div><h3>One shared lifecycle</h3><p>Ready → waiting → bite → optional struggle → caught or escaped. A fresh press hooks the bite. Terminal states absorb input. Optional nibbles return to waiting before the real bite; hooking a nibble loses the fish.</p><p>Line break → escape → catch → timeout is the terminal precedence. A 60-second limit bounds each run and recording. Waiting at “Ready” consumes no ticks.</p><p>The Rust core runs here through WebAssembly. The native Rust build and an independent Python port are checked against shared fixtures. Fish can follow custom segment sequences, and optional nibbles add false bites before hooking. Integer state and events must match exactly; numerical checkpoints use a 1e−12 absolute tolerance. This is bounded simulation, not exhaustive model checking.</p><a href="https://github.com/urcades/fishing/blob/main/spec/PROTOCOL.md" target="_blank" rel="noopener">Read the rules and protocol ↗</a> · <a href="https://github.com/urcades/fishing/blob/main/src/dynamics.rs" target="_blank" rel="noopener">Shared lifecycle ↗</a></div>
       </div>
     </details>
     <footer>Four ways to fish. One small protocol.<span id="runtime-status">Loading Rust core…</span></footer>
   </main>
-  <script type="module" src="./app.mjs?v=5"></script>
+  <script type="module" src="./app.mjs?v=0.2.0"></script>
 </body>
 </html>

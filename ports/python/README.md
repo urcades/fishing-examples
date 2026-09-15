@@ -8,6 +8,6 @@ Run from the package root:
 python3 conformance/check_python.py
 ```
 
-Python's `round` and unbounded integers need explicit protocol handling: durations use `floor(seconds*60+.5)`, and RNG uses a 32-bit mask. Geometry uses the supplied polygon vertices and the same prescribed clipping order. Functions copy mutable inputs before updating them.
+Python's `round` and unbounded integers need explicit protocol handling: durations use `min(36000,max(1,floor(seconds*60+.5)))`, and RNG uses a 32-bit mask. Geometry uses the supplied polygon vertices and the same prescribed clipping order. Functions copy mutable inputs before updating them.
 
 This is a readable conformance port, not an optimized production engine. A host can validate immutable configs once in its own trusted layer to avoid repeated geometry validation; do not remove validation at untrusted import boundaries. The reference port deliberately favors explicit checks over performance.

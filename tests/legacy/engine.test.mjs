@@ -153,5 +153,5 @@ test('configuration and seed normalization reject non-finite state', () => {
   assert.equal(createState(NaN).rng, 42);
   assert.equal(createState(-1).rng, 0xffffffff);
   assert.throws(() => createConfig({ strength: NaN }), /finite/);
-  assert.throws(() => createConfig({ strength: 100 }), /between/);
+  assert.throws(() => createConfig({ strength: 101 }), /between/);
 });

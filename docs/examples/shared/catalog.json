@@ -72,7 +72,7 @@
   "rods": {
     "willow": {
       "id": "willow",
-      "name": "Willow · balanced",
+      "name": "Willow \u00b7 balanced",
       "description": "The original handling and line. Neutral baseline.",
       "windowSize": 0.28,
       "reelRate": 0.08,
@@ -83,7 +83,7 @@
     },
     "swift": {
       "id": "swift",
-      "name": "Reed · responsive",
+      "name": "Reed \u00b7 responsive",
       "description": "Quicker handling and reeling, with a smaller capture window.",
       "windowSize": 0.23,
       "reelRate": 0.095,
@@ -94,7 +94,7 @@
     },
     "sturdy": {
       "id": "sturdy",
-      "name": "Oak · forgiving",
+      "name": "Oak \u00b7 forgiving",
       "description": "A wider window and stronger line; slower handling and reeling.",
       "windowSize": 0.35,
       "reelRate": 0.065,
@@ -107,7 +107,7 @@
   "baits": {
     "bare": {
       "id": "bare",
-      "name": "Bare hook · neutral",
+      "name": "Bare hook \u00b7 neutral",
       "description": "Equal attraction, original wait time, no bite bonus.",
       "attraction": 1,
       "biteBonus": 0,
@@ -119,7 +119,7 @@
     },
     "worm": {
       "id": "worm",
-      "name": "Worm · perch & loach",
+      "name": "Worm \u00b7 perch & loach",
       "description": "Favors insect eaters. A little more time to set the hook.",
       "attraction": 1.15,
       "biteBonus": 0.15,
@@ -131,7 +131,7 @@
     },
     "dough": {
       "id": "dough",
-      "name": "Dough · carp",
+      "name": "Dough \u00b7 carp",
       "description": "Favors carp and extends the bite; less appealing to minnows.",
       "attraction": 1,
       "biteBonus": 0.25,
@@ -143,7 +143,7 @@
     },
     "spinner": {
       "id": "spinner",
-      "name": "Spinner · minnow",
+      "name": "Spinner \u00b7 minnow",
       "description": "Fast attraction, especially for minnows. No extra hook time.",
       "attraction": 1.5,
       "biteBonus": 0,
@@ -277,7 +277,7 @@
       "min": 1,
       "max": 2,
       "step": 0.05,
-      "unit": "×",
+      "unit": "\u00d7",
       "uses": "struggle"
     },
     {
@@ -315,7 +315,7 @@
       "min": 0.5,
       "max": 2.5,
       "step": 0.05,
-      "unit": "×",
+      "unit": "\u00d7",
       "uses": "all"
     },
     {
@@ -1283,6 +1283,114 @@
       ],
       "id": "starburst",
       "area": 0.41928685306608354
+    }
+  },
+  "patterns": {
+    "classic": {
+      "name": "Classic rhythm",
+      "hint": "The original rest, warning and surge cycle.",
+      "segments": []
+    },
+    "dart": {
+      "name": "Double dart",
+      "hint": "A short warning, two quick changes of direction, then a rest.",
+      "segments": [
+        {
+          "behavior": "warning",
+          "intensity": 0.15,
+          "pace": 0.5,
+          "duration": 0.45,
+          "jitter": 0.05,
+          "target": {
+            "kind": "hold"
+          }
+        },
+        {
+          "behavior": "surge",
+          "intensity": 1.0,
+          "pace": 2.2,
+          "duration": 0.5,
+          "jitter": 0.15,
+          "target": {
+            "kind": "opposite"
+          }
+        },
+        {
+          "behavior": "surge",
+          "intensity": 0.7,
+          "pace": 1.8,
+          "duration": 0.45,
+          "jitter": 0.1,
+          "target": {
+            "kind": "opposite"
+          }
+        },
+        {
+          "behavior": "rest",
+          "intensity": 0.1,
+          "pace": 0.5,
+          "duration": 1.8,
+          "jitter": 0.15,
+          "target": {
+            "kind": "wander",
+            "distance": 0.12
+          }
+        }
+      ]
+    },
+    "glide": {
+      "name": "High / low glide",
+      "hint": "Glides between high and low targets, pausing at each end.",
+      "segments": [
+        {
+          "behavior": "rest",
+          "intensity": 0.2,
+          "pace": 0.9,
+          "duration": 2.0,
+          "jitter": 0.1,
+          "target": {
+            "kind": "point",
+            "point": [
+              0.25,
+              0.8
+            ]
+          }
+        },
+        {
+          "behavior": "warning",
+          "intensity": 0.1,
+          "pace": 0.3,
+          "duration": 0.6,
+          "jitter": 0,
+          "target": {
+            "kind": "hold"
+          }
+        },
+        {
+          "behavior": "surge",
+          "intensity": 0.7,
+          "pace": 1.1,
+          "duration": 2.0,
+          "jitter": 0.1,
+          "target": {
+            "kind": "point",
+            "point": [
+              0.75,
+              0.2
+            ]
+          }
+        },
+        {
+          "behavior": "warning",
+          "intensity": 0.1,
+          "pace": 0.3,
+          "duration": 0.6,
+          "jitter": 0,
+          "target": {
+            "kind": "hold"
+          }
+        }
+      ]
     }
   }
 }

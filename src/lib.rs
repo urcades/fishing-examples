@@ -83,7 +83,7 @@ fn dispatch(r: Request) -> Result<Value> {
             radius,
         } => {
             geometry::validate_capture(&capture)?;
-            bounded(size, 0.12, 0.45, "size")?;
+            bounded(size, 0.001, 1.0, "size")?;
             bounded(radius, 0.001, 0.1, "radius")?;
             for v in fish.into_iter().chain(tackle) {
                 bounded(v, 0.0, 1.0, "coordinate")?;

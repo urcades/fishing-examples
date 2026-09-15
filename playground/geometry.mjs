@@ -1,6 +1,6 @@
 // Rendering adapter: the canonical vertices are example data, not SVG paths.
-import { SHAPES as DATA } from '../docs/examples/shared/catalog.mjs';
-import { call } from './wasm.mjs';
+import { SHAPES as DATA } from '../docs/examples/shared/catalog.mjs?v=0.2.0';
+import { call } from './wasm.mjs?v=0.2.0';
 export const SHAPES = Object.freeze(Object.fromEntries(Object.entries(DATA).map(([id, shape]) => [id, Object.freeze({ ...shape,
   path: shape.rings.map(ring => ring.map(([x,y],i) => `${i?'L':'M'}${x*100},${(1-y)*100}`).join(' ')+'Z').join(' '),
 })])));

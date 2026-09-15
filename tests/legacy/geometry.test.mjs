@@ -43,7 +43,7 @@ test('polygon clipping agrees with an independent area oracle at edges and holes
 test('shape affects two-axis resource rates and stays inactive in earlier modes', () => {
   for (const style of ['spatial', 'pressure', 'bite']) assert.deepEqual(prepareEncounter({ style, shape: 'ring' }).config, prepareEncounter({ style }).config);
   const e = prepareEncounter({ style: 'two-axis', shape: 'ring' });
-  const s = { ...createState(e.seed, e.config), phase: 'struggle' };
+  const s = { ...createState(e.seed, e.config), phase: 'struggle', behaviorDuration: 60 };
   assert.ok(observe(s, e.config).progressRate < 0);
   assert.ok(observe({ ...s, fishX: .605 }, e.config).progressRate > 0);
 });
